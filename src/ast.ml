@@ -13,6 +13,7 @@ type 'a annotated_node = {loc : position[@opaque]; node : 'a; id : int }[@@deriv
 
 type typ =
   | TypI                             (* Type int                    *)
+  | TypF                             (* Type float                  *)
   | TypB                             (* Type bool                   *)
   | TypC                             (* Type char                   *)
   | TypA of typ * int option         (* Array type                  *)
@@ -26,6 +27,7 @@ and expr_node =
   | Assign of access * expr          (* x=e  or  *p=e  or  a[e]=e   *)
   | Addr of access                   (* &x   or  &*p   or  &a[e]    *)
   | ILiteral of int                  (* Integer literal             *)
+  | FLiteral of float                (* Float literal               *)
   | CLiteral of char                 (* Char literal                *)
   | BLiteral of bool                 (* Bool literal                *)
   | UnaryOp of uop * expr            (* Unary primitive operator    *)
@@ -51,8 +53,8 @@ and stmt_node =
 
 and stmtordec = stmtordec_node annotated_node
 and stmtordec_node =
-  | Dec of typ * identifier          (* Local variable declaration  *)
-  | Stmt of stmt                     (* A statement                 *)
+  | Dec of typ * identifier * expr list option  (* Local variable declaration  *)
+  | Stmt of stmt                                (* A statement                 *)
 [@@deriving show]
 
 type fun_decl = {
@@ -65,7 +67,7 @@ type fun_decl = {
 type topdecl = topdecl_node annotated_node
 and topdecl_node =
   | Fundecl of fun_decl
-  | Vardec of typ * identifier
+  | Vardec of typ * identifier * expr list option
 [@@deriving show]
 
 type program = Prog of topdecl list [@@deriving show]
