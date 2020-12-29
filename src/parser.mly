@@ -195,8 +195,8 @@ stm:
       id = 0 }}
   | id=ID LPAR l=separated_list(COMMA ,ex ) RPAR SEMICOLON
     {{loc = $loc; node = Expr({loc=$loc; node=Call(id,l); id =0}); id = 0}}
-  | a=assop SEMICOLON
-    {{loc = $loc; node = Expr(a); id = 0}} 
+  | e=ex SEMICOLON (*a=assop*)
+    {{loc = $loc; node = Expr(e); id = 0}} 
   | RETURN e = option( ex ) SEMICOLON
     {{loc = $loc; node = Return(e); id = 0 }}
   | b=block

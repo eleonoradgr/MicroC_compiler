@@ -1,5 +1,5 @@
 TARGET=microcc
-PARSERTEST = ./testparser
+TEST = ./test
 PARSEROUTPUT = parserout
 
 default: $(TARGET).native
@@ -16,11 +16,11 @@ clean:
 	ocamlbuild -clean ;\
 	rm -f $(PARSEROUTPUT);
 
-parsertest: $TARGET $(PARSERTEST)
+test: $TARGET $(TEST)
 		rm -f $(PARSEROUTPUT); \
-		for file in $(PARSERTEST)/* ; do \
+		for file in $(TEST)/* ; do \
 			echo $${file} >> $(PARSEROUTPUT); \
 			./$(TARGET) $${file} >> $(PARSEROUTPUT);\
 			done
 
-.PHONY: clean default parsertest 
+.PHONY: clean default test 
