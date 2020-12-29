@@ -7,15 +7,21 @@
     open Util
 
     (* Define here your utility functions *)
+    
+    let counter = ref(0)
+    let next_label () = incr counter; !counter
 
-      let first xy = match xy with (x, y) -> x
-      let second xy = match xy with (x, y) -> y
+    let first xy = match xy with (x, y) -> x
+    let second xy = match xy with (x, y) -> y
 
-      let bulid_string s =
-        let explode s =
-          let char_to_exp c = {loc=dummy_pos ; node=CLiteral(c); id=0} 
-          in List.map char_to_exp (List.init (String.length s) ( String.get s))
-        in List.append (explode s) [{loc=dummy_pos ; node=CLiteral('\x00'); id=0}]
+    let bulid_string s =
+      let explode s =
+        let char_to_exp c = {loc=dummy_pos ; node=CLiteral(c); id=next_label()} 
+        in List.map char_to_exp (List.init (String.length s) ( String.get s))
+      in List.append (explode s) [{loc=dummy_pos ; node=CLiteral('\x00'); id=next_label()}]
+
+    let make_node l n =
+      {loc=l ; node=n; id=next_label()}
 %}
 
 /* Tokens declarations */
@@ -76,24 +82,16 @@
 /* Grammar specification */
 
 program:
-  |  f=list(topdec) EOF       {Prog(f)}
-  | error
-    { raise (Syntax_error "error in program") }
+  |  f=list(topdec) EOF       { Prog(f) }
+  | error                     { raise (Syntax_error "error in program") }
 ;
 
 topdec:
   | v=var e=init_var SEMICOLON               
-    { {loc= $loc ; node=Vardec(first v, second v, e); id=0} }
-  | f=fund
-    { {loc= $loc ; node=f; id=0} }
-;
-
-fund:
-/*| t=types_fun  id=ID LPAR par=separated_list(COMMA , var) RPAR b= block
-      { Fundecl({typ = t; fname = id ; formals = par; body = b}) }*/
+    { make_node $loc (Vardec(first v, second v, e)) }
   | v=var LPAR par=separated_list(COMMA, var) RPAR b=block
-      { Fundecl({typ = first v; fname = second v; formals = par; body = b}) }
-; 
+    { make_node $loc (Fundecl {typ = first v; fname = second v; formals = par; body = b}) }
+;
 
 var:
   | t=type_def id=ID 
@@ -101,9 +99,9 @@ var:
   | t=type_def id=ID LBRACK RBRACK                   
       { (TypA(t,Some(0)), id) }
   | t=type_def id=ID LBRACK i=INT RBRACK        
-      {(TypA(t,Some(i)), id)}
+      { (TypA(t,Some(i)), id) }
   | LPAR v=var RPAR                                           
-      {v}
+      { v }
 ;
 
 type_def:
@@ -122,128 +120,93 @@ type_def:
 ;
 
 init_var:
-  | { None }
+  |   { None }
   | ASS e=ex 
-      {Some([e])}
+      { Some([e]) }
   | ASS LBRACE l=separated_list(COMMA, ex) RBRACE
-      {Some(l)}
+      { Some(l) }
   | ASS s=STRING
-      {Some( bulid_string s) }
-;
-
-types_fun:
-  | t=types_dec
-    { t } 
-  | VOID
-    { TypV }
-;
-
-types_dec:
-  | TYPE_INT
-    { TypI }
-  | TYPE_BOOL
-    { TypB }
-  | TYPE_CHAR
-    { TypC }
+      { Some( bulid_string s) }
 ;
 
 block:
   | LBRACE b=list(inblock) RBRACE
-    { {loc = $loc; node = Block(b); id = 0 }}
+    { make_node $loc (Block b) }
 ;
 
 inblock:
   | v=var e=init_var SEMICOLON
-    {{loc = $loc; node = Dec(first v, second v, e); id = 0}}
+    { make_node $loc (Dec(first v, second v, e)) }
   | s=stm
-    {{loc = $loc; node = Stmt(s); id = 0}}
+    { make_node $loc (Stmt s) }
 ;
 
 stm:
   | IF LPAR e=ex RPAR b=stm  %prec THEN
-    {let emptyb = {loc = $loc; node = Block([]); id = 0 } in
-    {loc = $loc; node = If(e,b,emptyb); id = 0 }}
+    { let emptyb = make_node $loc (Block []) in
+      make_node $loc (If(e,b,emptyb)) }
   | IF LPAR e=ex RPAR b1=stm ELSE b2=stm 
-    {{loc = $loc; node = If(e,b1,b2); id = 0 }}
+    { make_node $loc (If(e,b1,b2)) }
   | FOR LPAR a1=acc ASS e1=ex ";" e=ex ";" a2=acc ASS e2=ex RPAR s=stm
-    {
-     let new_block = { loc=$loc;
-                       node= Block([{loc = $loc; node=Stmt(s); id=0};{loc = $loc; node = Stmt({loc= $loc; node=Expr({loc=$loc; node=Assign(a2,e2); id =0}); id=0}); id=0}]); 
-                       id=0;
-                      } in
-      {loc = $loc;
-      node = Block([{loc=$loc;
-                    node=Stmt({loc = $loc; node = Expr({loc=$loc; node=Assign(a1,e1); id =0}); id = 0});
-                    id = 0};
-                    {loc=$loc;
-                    node=Stmt({loc = $loc; node = While(e,new_block); id = 0 });
-                    id = 0}]);
-      id = 0}
+    { let new_block = make_node $loc (Block [( make_node $loc (Stmt(s)) );
+                                            ( make_node $loc (Stmt(make_node $loc (Expr(make_node $loc (Assign(a2,e2)))))))])
+      in
+      make_node $loc (Block [ (make_node $loc (Stmt(make_node $loc (Expr(make_node $loc (Assign(a1,e1))))) ));
+                              (make_node $loc (Stmt(make_node $loc (While(e,new_block)))))])
     }
   | FOR LPAR ";" e=ex ";" RPAR s=stm
-   {{loc = $loc; node = While(e,s); id = 0 }}
+    { make_node $loc (While(e,s)) }
   | WHILE LPAR e=ex RPAR s=stm
-    {{loc = $loc; node = While(e,s); id = 0 }}
+    { make_node $loc (While(e,s)) }
   | DO b=block WHILE LPAR e=ex RPAR SEMICOLON
-    {{loc = $loc; 
-      node =Block([{loc=$loc;
-                    node=Stmt(b);
-                    id=0};
-                    {loc=$loc;
-                    node=Stmt({loc=$loc; node=While(e,b); id=0});
-                    id=0}]); 
-      id = 0 }}
-  | id=ID LPAR l=separated_list(COMMA ,ex ) RPAR SEMICOLON
-    {{loc = $loc; node = Expr({loc=$loc; node=Call(id,l); id =0}); id = 0}}
-  | e=ex SEMICOLON (*a=assop*)
-    {{loc = $loc; node = Expr(e); id = 0}} 
+    { make_node $loc (Block [( make_node $loc (Stmt(b)));
+                            ( make_node $loc (Stmt(make_node $loc (While(e,b)))))]) }
+  | e=ex SEMICOLON
+    { make_node $loc (Expr e) } 
   | RETURN e = option( ex ) SEMICOLON
-    {{loc = $loc; node = Return(e); id = 0 }}
+    { make_node $loc (Return e) }
   | b=block
-    {b}
+    { b }
 ;
 
-elsestm:
-  | ELSE s=stm
-    {s}
-;
 acc:
   | x=ID
-    {{loc = $loc; node = AccVar(x); id = 0}}
+    { make_node $loc (AccVar x) }
   | "*" a=acc %prec POINTER
-    {{loc = $loc; node = AccDeref({loc = $loc; node = Access(a); id = 0}); id = 0}}
+    { make_node $loc (AccDeref(make_node $loc (Access a))) }
   | x=ID LBRACK ex2=ex RBRACK
-    {{loc = $loc; node = AccIndex({loc = $loc; node = AccVar(x); id = 0},ex2); id = 0}}
+    { make_node $loc (AccIndex(make_node $loc (AccVar x),ex2)) }
 ;
+
 ex:
   | a=acc 
-    {{loc=$loc; node=Access(a); id=0}}
+    { make_node $loc (Access a)}
   | a=assop %prec ASS 
     { a } 
   | ADDR x=ID
-    {{loc = $loc; node = Addr({loc = $loc; node = AccVar(x); id = 0}); id = 0}}
+    { make_node $loc (Addr(make_node $loc (AccVar x))) }
   | i=INT
-    {{loc = $loc; node = ILiteral(i); id = 0}}
+    { make_node $loc (ILiteral i) }
   | f=FLOAT
-    {{loc = $loc; node = FLiteral(f); id = 0}}
+    { make_node $loc (FLiteral f) }
   | c=CHAR
-    {{loc = $loc; node = CLiteral(c); id = 0}}
+    { make_node $loc (CLiteral c) }
   | TRUE
-    {{loc = $loc; node = BLiteral(true); id = 0}}
+    { make_node $loc (BLiteral true) }
   | FALSE
-    {{loc = $loc; node = BLiteral(false); id = 0}}
+    { make_node $loc (BLiteral false) }
   | MINUS ex1=ex %prec UMINUS
-    {{loc = $loc; node = UnaryOp(Neg,ex1); id = 0}}
+    { make_node $loc (UnaryOp(Neg,ex1)) }
   | NOT ex1=ex
-    {{loc = $loc; node = UnaryOp(Not,ex1); id = 0}}
+    { make_node $loc (UnaryOp(Not,ex1)) }
   | ex1=ex b=binop ex2=ex
-    {{loc = $loc; node = BinaryOp(b,ex1,ex2); id = 0}}
+    { make_node $loc (BinaryOp(b,ex1,ex2)) }
   | ex1=ex LESS ex2=ex
-    {{loc = $loc; node = BinaryOp(Greater,ex2,ex1); id = 0}}
+    { make_node $loc (BinaryOp(Greater,ex2,ex1)) }
   | ex1=ex LEQ ex2=ex
-    {{loc = $loc; node = BinaryOp(Geq,ex2,ex1); id = 0}}
+    { make_node $loc (BinaryOp(Geq,ex2,ex1)) }
   | id=ID LPAR l=separated_list(COMMA ,ex ) RPAR
-    {{loc=$loc; node=Call(id,l); id =0}}
+    { make_node $loc (Call(id,l)) }
   | LPAR e=ex RPAR
     {e}
   | error
@@ -252,44 +215,28 @@ ex:
 
 assop:
   | a=acc ASS e=ex     
-    { {loc=$loc; node=Assign(a,e); id =0} }
+    { make_node $loc (Assign(a,e)) }
   | a=acc PLUSASS e=ex 
-    { let new_exp = {loc=$loc; 
-                    node=BinaryOp(Add,{loc=$loc; node=Access(a); id=0},e); 
-                    id=0} in
-     {loc=$loc; node=Assign(a,new_exp); id =0}}
+    { let new_exp = make_node $loc (BinaryOp(Add, (make_node $loc (Access a)), e)) in
+     make_node $loc (Assign(a,new_exp)) }
   | a=acc MINUSASS e=ex
-    { let new_exp = {loc=$loc;
-                    node=BinaryOp(Sub,{loc=$loc; node=Access(a); id=0},e);
-                    id=0} in
-     {loc=$loc; node=Assign(a,new_exp); id =0}}
+    { let new_exp = make_node $loc (BinaryOp(Sub, (make_node $loc (Access a)), e)) in
+     make_node $loc (Assign(a,new_exp)) }
   | a=acc MULTASS e=ex
-    { let new_exp = {loc=$loc;
-                    node=BinaryOp(Mult,{loc=$loc; node=Access(a); id=0},e);
-                    id=0}in
-     {loc=$loc; node=Assign(a,new_exp); id =0}}
+    { let new_exp = make_node $loc (BinaryOp(Mult, (make_node $loc (Access a)), e)) in
+     make_node $loc (Assign(a,new_exp)) }
   | a=acc DIVASS e=ex
-    { let new_exp = {loc=$loc;
-                    node=BinaryOp(Div,{loc=$loc; node=Access(a); id=0},e);
-                    id=0} in
-     {loc=$loc; node=Assign(a,new_exp); id =0}}
+    { let new_exp = make_node $loc (BinaryOp(Div, (make_node $loc (Access a)), e)) in
+     make_node $loc (Assign(a,new_exp)) }
   | a=acc MODASS e=ex   
-    { let new_exp = {loc=$loc;
-                    node=BinaryOp(Mod,{loc=$loc; node=Access(a); id=0},e);
-                    id=0} in
-     {loc=$loc; node=Assign(a,new_exp); id =0}}
+    { let new_exp = make_node $loc (BinaryOp(Mod, (make_node $loc (Access a)), e)) in
+     make_node $loc (Assign(a,new_exp)) }
   | INC a=acc | a=acc INC
-    {let new_exp = {loc=$loc;
-                    node=BinaryOp(Add,{loc=$loc; node=Access(a); id=0},
-                                      {loc=$loc; node=ILiteral(1); id=0});
-                    id=0} in
-     {loc=$loc; node=Assign(a,new_exp); id =0}}
+    { let new_exp = make_node $loc (BinaryOp(Add, (make_node $loc (Access a)), (make_node $loc (ILiteral 1)))) in
+      make_node $loc (Assign(a,new_exp)) }
   | DEC a=acc | a=acc DEC
-    {let new_exp = {loc=$loc;
-                    node=BinaryOp(Sub,{loc=$loc; node=Access(a); id=0},
-                                      {loc=$loc; node=ILiteral(1); id=0});
-                    id=0} in
-     {loc=$loc; node=Assign(a,new_exp); id =0}}
+    {let new_exp = make_node $loc (BinaryOp(Sub, (make_node $loc (Access a)), (make_node $loc (ILiteral 1)))) in
+      make_node $loc (Assign(a,new_exp))}
 ;
 
 %inline binop:
