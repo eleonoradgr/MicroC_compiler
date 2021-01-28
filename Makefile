@@ -9,7 +9,7 @@ $TARGET: default
 native: $(TARGET).native
 
 %.native:
-	ocamlbuild -use-ocamlfind $@
+	ocamlbuild -use-ocamlfind -pkgs llvm,llvm.bitwriter,llvm.scalar_opts $@
 	mv $@ $*
 
 clean:
@@ -20,7 +20,7 @@ test: $TARGET $(TEST)
 		rm -f $(PARSEROUTPUT); \
 		for file in $(TEST)/* ; do \
 			echo $${file} >> $(PARSEROUTPUT); \
-			./$(TARGET) $${file} >> $(PARSEROUTPUT);\
+			./$(TARGET) -s $${file} >> $(PARSEROUTPUT);\
 			done
 
 .PHONY: clean default test 
