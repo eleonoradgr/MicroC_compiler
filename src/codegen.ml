@@ -64,7 +64,7 @@ let rec lltype_of_type = function
   | TFloat      -> float_t
   | TBool       -> bool_t
   | TChar       -> char_t
-  | TArray(t,i) -> array_t (lltype_of_type t) i
+  | TArray(t,i) -> pointer_t (lltype_of_type t)
   | TPnt(t)     -> pointer_t (lltype_of_type t)
   | _           -> failwith "Invalid type"
   
@@ -104,23 +104,27 @@ let codegen_expr_global env te = match te.node with
 
 
 let rec codegen_expr  env ibuilder te= 
+  
   let rec codgen_acc  env ibuilder = function
                     | TAccVar(i)    -> L.build_load (Symbol_table.lookup i env) i ibuilder
                     | TAccDeref(x)  -> let p = codegen_expr env ibuilder x in
                                       L.build_load (L.build_gep p [| L.const_int int_t 0; L.const_int int_t 0 |] "tmp" ibuilder) "tmp" ibuilder
                     | TAccIndex(a,i)-> let v = codgen_acc env ibuilder a.node in
-                                        let i = codegen_expr env ibuilder i in
-                                        L.build_load (L.build_gep v [| L.const_int int_t 0; i |] "acc" ibuilder) "acc" ibuilder in
+                                      let i = codegen_expr env ibuilder i in
+                                      Printf.printf "Nell'accind%s\n"(L.string_of_lltype (L.type_of v));
+                                      L.build_load (L.build_gep v [| i |] "acc" ibuilder) "acc" ibuilder in                                      
   let rec codgen_ass  env ibuilder = function
                     | TAccVar(i)    -> Symbol_table.lookup i env
                     | TAccDeref(x)  -> let p = codegen_expr env ibuilder x in
                                         L.build_gep p [| L.const_int int_t 0; L.const_int int_t 0 |] "tmp" ibuilder
                     | TAccIndex(a,i)-> let v = codgen_acc env ibuilder a.node in
                                         let i = codegen_expr env ibuilder i in
-                                        L.build_gep v [| L.const_int int_t 0; i |] "acc" ibuilder in                                      
-  
+                                        L.build_gep v [| i |] "acc" ibuilder in
   match te.node with
-    | TAccess(a)  -> codgen_acc env ibuilder a.node
+    | TAccess(a)  -> (match te.ty with
+                      |TArray(r,_) -> ignore(Printf.printf("entro qui\n"));
+                                      codgen_acc env ibuilder a.node
+                      |_ -> codgen_acc env ibuilder a.node )
     | TAssign(a,ex)-> let a = codgen_ass env ibuilder a.node in
                       let e = codegen_expr env ibuilder ex in
                       ignore (L.build_store e a ibuilder); e
@@ -202,16 +206,42 @@ let rec codegen_stmt current_fun env ibuilder = function
   | TBlock(l)       ->  (let rec codegen_block current_fun env ibuilder = function
                         | [] -> ibuilder
                         | x::xs -> (match x.node with
-                                    |TDec(t,i,e) -> let local_var = L.build_alloca (lltype_of_type t) i ibuilder in
+                                    |TDec(t,i,e) -> (match e with
+                                                      |[x] -> let local_var = L.build_alloca (lltype_of_type t) i ibuilder in
+                                                              let env' = Symbol_table.add_entry i local_var env in
+                                                              let e' = codegen_expr env' ibuilder x in
+                                                              ignore(L.build_store e' local_var ibuilder);
+                                                              codegen_block current_fun env' ibuilder xs
+                                                      |_ -> (match t with
+                                                              | TArray(r,len) -> (let local_var = L.build_alloca (array_t (lltype_of_type r) len) i ibuilder in
+                                                                                  Printf.printf "%s\n"(L.string_of_lltype (L.type_of local_var));
+                                                                                  let ptr = L.build_struct_gep local_var 0 "acc" ibuilder in
+                                                                                  let ptr1 = L.build_alloca (pointer_t int_t) "acc" ibuilder in
+                                                                                  Printf.printf "guardamiii%s\n"(L.string_of_lltype (L.type_of ptr1));
+                                                                                  ignore(L.build_store ptr ptr1 ibuilder);
+                                                                                  let env' = Symbol_table.add_entry i ptr1 env in
+                                                                                  let ls = List.map (codegen_expr env ibuilder ) e in
+                                                                                  let test i e = (let addressi = L.build_gep local_var [| L.const_int int_t 0; L.const_int int_t i |] "tmp" ibuilder in
+                                                                                                    ignore(L.build_store e addressi ibuilder)) in
+                                                                                  List.iteri test ls;
+                                                                                  codegen_block current_fun env' ibuilder xs
+                                                                                  (*let test = L.const_array (array_t (lltype_of_type r) len) ls in
+                                                                                  L.build_pointercast test (L.pointer_type (lltype_of_type r)) "tmp" ibuilder*))
+                                                              |_ -> failwith("errore")))
+                                                    (*let local_var = L.build_alloca (lltype_of_type t) i ibuilder in
                                                     let env' = Symbol_table.add_entry i local_var env in
-                                                    let e' = (match e with
-                                                              |[x] -> codegen_expr env' ibuilder x
+                                                    ignore(match e with
+                                                              |[x] -> let e' = codegen_expr env' ibuilder x in
+                                                                      ignore(L.build_store e' local_var ibuilder)
                                                               |_ -> (match t with
-                                                                      | TArray(r,len) -> (let ls = Array.of_list (List.map (codegen_expr_global env ) e) in
-                                                                                          L.const_array (array_t (lltype_of_type r) len) ls )
-                                                                      |_ -> failwith("errore")) ) in
-                                                    ignore(L.build_store e' local_var ibuilder);
-                                                    codegen_block current_fun env' ibuilder xs
+                                                                      | TArray(r,len) -> (let ls = List.map (codegen_expr env ibuilder ) e in
+                                                                                          let test i e = (let addressi = L.build_gep local_var [| L.const_int int_t 0; L.const_int int_t i |] "tmp" ibuilder in
+                                                                                                            ignore(L.build_store e addressi ibuilder)) in
+                                                                                          List.iteri test ls
+                                                                                          (*let test = L.const_array (array_t (lltype_of_type r) len) ls in
+                                                                                          L.build_pointercast test (L.pointer_type (lltype_of_type r)) "tmp" ibuilder*))
+                                                                      |_ -> failwith("errore")) );
+                                                    codegen_block current_fun env' ibuilder xs*)
                                     |TStmt(s)-> let b = codegen_stmt current_fun env ibuilder s.node in
                                                 codegen_block current_fun env b xs) in
                         codegen_block current_fun env ibuilder l)
@@ -228,6 +258,7 @@ let add_formals env formals llformals builder =
     L.set_value_name n lt;
     let local = L.build_alloca (lltype_of_type t) n builder in
     ignore (L.build_store lt local builder);
+    Printf.printf "%s\n"(L.string_of_lltype (L.type_of local));
     Symbol_table.add_entry n local e in
 List.fold_left2 add_formal env formals llformals
 
