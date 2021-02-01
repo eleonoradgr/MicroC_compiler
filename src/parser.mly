@@ -185,6 +185,8 @@ ex:
     { a } 
   | ADDR x=ID
     { make_node $loc (Addr(make_node $loc (AccVar x))) }
+  | NULL
+    { make_node $loc (ILiteral(-1)) }
   | i=INT
     { make_node $loc (ILiteral i) }
   | f=FLOAT

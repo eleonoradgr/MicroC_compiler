@@ -161,18 +161,26 @@ let rec check_expr  (e:expr) (gamma : context) (t : res option) =
                         if(t = None || t = Some(TPnt ty.ty))  then (gamma, {ty = (TPnt ty.ty); node = TAddr(ty); id = e.id})
                         else Util.raise_semantic_error e.loc (String.concat "" ["This expression has type "; (show_res ty.ty); 
                                                                             "but an expression was expeced of type "; (show_res (Option.get t))] )
-  | ILiteral(i)     ->  if(t = None || t = Some(TInt) || t = Some(TFloat))  then (let ty = Option.value t ~default:TInt in
+  | ILiteral(i)     -> (match t,i with
+                        |None,_
+                        |Some(TInt),_
+                        |Some(TFloat),_ -> let ty = Option.value t ~default:TInt in
+                                            gamma,{ty = ty; node = TILiteral(i); id = e.id}
+                        |Some(TPnt(_)),-1 -> gamma,{ty = (Option.get t); node = TILiteral(i); id = e.id}
+                        |_->Util.raise_semantic_error e.loc (String.concat "" ["This expression has type Tast.TInt ";
+                                                                            "but an expression was expeced of type "; (show_res (Option.get t))] ))
+                        (*if(t = None || t = Some(TInt) || t = Some(TFloat))  then (let ty = Option.value t ~default:TInt in
                                                                                   gamma,{ty = ty; node = TILiteral(i); id = e.id})
-                        else Util.raise_semantic_error e.loc (String.concat "" ["This expression has type TInt";
-                                                                            "but an expression was expeced of type "; (show_res (Option.get t))] )
+                        else Util.raise_semantic_error e.loc (String.concat "" ["This expression has type Tast.TInt ";
+                                                                            "but an expression was expeced of type "; (show_res (Option.get t))] )*)
   | FLiteral(f)     -> if(t = None || t = Some(TFloat))  then (gamma,{ty = TFloat; node = TFLiteral(f); id = e.id})
-                        else Util.raise_semantic_error e.loc (String.concat "" ["This expression has type TFloat";
+                        else Util.raise_semantic_error e.loc (String.concat "" ["This expression has type Tast.TFloat ";
                                                                             "but an expression was expeced of type "; (show_res (Option.get t))] )
   | CLiteral(c)     -> if(t = None || t = Some(TChar))  then (gamma,{ty = TChar; node = TCLiteral(c); id = e.id})
-                        else Util.raise_semantic_error e.loc (String.concat "" ["This expression has type TChar";
+                        else Util.raise_semantic_error e.loc (String.concat "" ["This expression has type Tast.TChar ";
                                                                             "but an expression was expeced of type "; (show_res (Option.get t))] )
   | BLiteral(b)     -> if(t = None || t = Some(TBool))  then (gamma,{ty = TBool; node = TBLiteral(b); id = e.id})
-                        else Util.raise_semantic_error e.loc (String.concat "" ["This expression has type TBool";
+                        else Util.raise_semantic_error e.loc (String.concat "" ["This expression has type Tast.TBool";
                                                                             "but an expression was expeced of type "; (show_res (Option.get t))] )
   | UnaryOp(u, ex)  -> ( match u with
                           |Neg ->  (match t with
