@@ -1,5 +1,6 @@
 TARGET=microcc
 TEST = ./test
+TESTCODEGEN = ./testcodegen
 PARSEROUTPUT = parserout
 
 default: $(TARGET).native
@@ -14,7 +15,8 @@ native: $(TARGET).native
 
 clean:
 	ocamlbuild -clean ;\
-	rm -f $(PARSEROUTPUT);
+	rm -f $(PARSEROUTPUT);\
+	rm -f test.o
 
 test: $TARGET $(TEST)
 		rm -f $(PARSEROUTPUT); \
@@ -22,5 +24,16 @@ test: $TARGET $(TEST)
 			echo $${file} >> $(PARSEROUTPUT); \
 			./$(TARGET) -s $${file} >> $(PARSEROUTPUT);\
 			done
+testcodegen: $TARGET
+			for file in $(TESTCODEGEN)/*.mc ; do \
+			echo $${file};\
+			./$(TARGET) $${file};\
+			llvm-link a.bc rt-support.bc -o test.bc;\
+			llc -filetype=obj test.bc;\
+			clang test.o;\
+			./a.out >> text1.txt;\
+			diff text1.txt $${file%.*}.out;\
+			rm -f text1.txt;\
+			done
 
-.PHONY: clean default test 
+.PHONY: clean default test testcodegen
