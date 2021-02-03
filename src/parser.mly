@@ -88,9 +88,10 @@ topdec:
     { make_node $loc (Fundecl {typ = first v; fname = second v; formals = par; body = b}) }
   | error
       { raise (Syntax_error "Error in top declaration") }
+  
 ;
 
-var:
+%inline  var:
   | t=type_def id=ID 
       { (t,id) }
   | t=type_def id=ID LBRACK RBRACK                   
@@ -114,7 +115,7 @@ type_def:
     { TypP(t) }
 ;
 
-init_var:
+%inline init_var:
   |   { None }
   | ASS e=ex 
       { Some([e]) }
@@ -124,7 +125,7 @@ init_var:
       { Some( bulid_string s) }
 ;
 
-block:
+%inline block:
   | LBRACE b=list(inblock) RBRACE
     { make_node $loc (Block b) }
 ;
@@ -162,6 +163,7 @@ stm:
     { make_node $loc (Return e) }
   | b=block
     { b }
+  
 ;
 
 acc:

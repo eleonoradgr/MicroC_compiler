@@ -53,4 +53,4 @@ let raise_semantic_error (startp, endp) msg =
                Printf.sprintf "%d-%d" start_column_number end_column_number
   in
   let log = Printf.sprintf "%s:%s: %s" line column msg in 
-  Printf.fprintf stderr "Warning:\n%s\n" log
+  Printf.fprintf stderr "%s\n" log
