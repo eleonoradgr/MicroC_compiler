@@ -1,10 +1,14 @@
 int a = 6;
 int *e;
 int prova;
+int add(){
+  int b;
+  int c;
+  int a = b+c;
+}
 int main(int n){
   int i;
   i = 6;
-  (int prova1);
   e = &a;
   int *p;
   i++;

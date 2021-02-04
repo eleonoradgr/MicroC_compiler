@@ -56,7 +56,7 @@ let rec expr_init (t : res)  (l : position) =
   | TInt        -> [{ty = TInt; node = (TILiteral 0); id = -1}]
   | TFloat      -> [{ty = TFloat; node = (TFLiteral 0.0); id = -1}]
   | TBool       -> [{ty = TBool; node = (TBLiteral false); id = -1}] 
-  | TChar       -> [{ty = TChar; node = (TCLiteral '\x00'); id = -1}]
+  | TChar       -> [{ty = TChar; node = (TCLiteral (Char.chr(0))); id = -1}]
   | TArray(x,y) -> if y = 0 then [] else (expr_init x l)@(expr_init (TArray(x,(y-1))) l)
   | TPnt(x)     -> []
   | _       -> Util.raise_semantic_error l "Not a valid type for variable"
@@ -152,7 +152,7 @@ let rec check_expr  (e:expr) (gamma : context) (t : res option) =
                         let check_array ty t = (match t with
                                                 | Some(TArray(ty,_)) -> true                        
                                                 | _ -> false) in 
-                        if(t = None || t = Some(ty.ty) || (t=Some(TFloat) && ty.ty =TInt) || check_array ty.ty t ) 
+                        if(t = None || t = Some(ty.ty) || check_array ty.ty t )
                         then (gamma, {ty = ty.ty; node = TAccess(ty); id = e.id})
                         else Util.raise_semantic_error e.loc (String.concat "" ["This expression has type "; (show_res ty.ty); 
                                                                             "but an expression was expeced of type "; (show_res (Option.get t))] )
@@ -259,17 +259,18 @@ let init_var (ty : res) (ex : expr list) (gamma : context) (global : bool)=
   @param s is the statement node
   @param gamma the context
   @param t the type expected for the statement, None if it's not requested a specific type.
+  @param new_env true if the statemest must be evaluate in a new environment, false otherwise
   @return tstmt the new statement typed_node
   @raise Semantic_error  
 *)                       
-let rec check_stmt (s:stmt) (gamma : context) (t : res) = 
+let rec check_stmt (s:stmt) (gamma : context) (t : res) (new_env : bool)= 
   match s.node with
   |If(e,s1,s2)  ->  let (gamma',tex) = check_expr e gamma (Some TBool)  in
-                    let tstm1 = check_stmt s1 (Symbol_table.begin_block gamma) t in
-                    let tstm2 = check_stmt s2 (Symbol_table.begin_block gamma) t in
+                    let tstm1 = check_stmt s1 (Symbol_table.begin_block gamma) t false in
+                    let tstm2 = check_stmt s2 (Symbol_table.begin_block gamma) t false in
                     { ty = t ; node = TIf( tex, tstm1, tstm2); id = s.id}
   |While(e,s1)  ->  let (gamma',tex) = check_expr e gamma (Some TBool)  in
-                    let tstm1 = check_stmt s1 (Symbol_table.begin_block gamma) t in
+                    let tstm1 = check_stmt s1 (Symbol_table.begin_block gamma) t false in
                     { ty = t ; node = TWhile(tex, tstm1); id = s.id}
   |Expr(e)      ->  let (gamma',tex) = check_expr e gamma None in
                     {ty = TVoid; node = TExpr(tex); id = s.id}
@@ -290,7 +291,7 @@ let rec check_stmt (s:stmt) (gamma : context) (t : res) =
                                                 let g = add_def i ty gamma "Variable already defined" x.loc in
                                                 let d = {ty = ty; node = TDec( ty, i, texprl); id = x.id} in 
                                                 if (ret) then type_block xs g (tstmtsl) ret else type_block xs g (tstmtsl @ [d]) ret)
-                                |Stmt(s)    -> (let ts = check_stmt s gamma t  in
+                                |Stmt(s)    -> (let ts = check_stmt s gamma t true in
                                               let s1 = {ty = t; node = (TStmt ts); id = x.id} in
                                                if(ret) 
                                                then (Util.print_warning s.loc "Warning: Code in the block not reachable at this point"; 
@@ -300,7 +301,8 @@ let rec check_stmt (s:stmt) (gamma : context) (t : res) =
                                                       |_ -> type_block xs gamma (tstmtsl @ [s1]) ret
                                                )))
                     in
-                    type_block l (Symbol_table.begin_block gamma) [] false)
+                    let gamma' = if(new_env) then  (Symbol_table.begin_block gamma) else gamma in
+                    type_block l gamma' [] false)
 
 (** Check if the topdecl is semantically correct 
   @param gamma the context
@@ -321,7 +323,7 @@ let rec top_checking (gamma : context) (topdec : topdecl ) =
                             | (t,i)::xs -> add_param (add_def i (typevar t topdec.loc) g "Parameter name already used" topdec.loc) xs 
                             in
                           add_param (Symbol_table.begin_block g) y.formals in
-                        let  tbody = check_stmt y.body new_gamma ty in
+                        let  tbody = check_stmt y.body new_gamma ty false in
                         let tfun = {typ = ty; fname = y.fname; formals = tyformals; body = tbody} in
                         (g,{ ty = tynode; node = (TFundecl tfun); id = topdec.id}))
   | Vardec(t,i,e)   -> (let ty = (typevar t topdec.loc) in
@@ -335,13 +337,18 @@ let rec top_checking (gamma : context) (topdec : topdecl ) =
   @param gamma the context
 *) 
 let check_main (gamma : context) =
-  try   (let TFun(par,r) = Symbol_table.lookup "main" gamma in
-        if (r != TVoid && r != TInt) then Util.raise_semantic_error dummy_pos "Main function must return int or void")
-  with | Symbol_table.NotFoundEntry ->  Util.raise_semantic_error dummy_pos "Main function not defined"
-       | _ -> Util.raise_semantic_error dummy_pos "Main is not a function"
+  let t = try Symbol_table.lookup "main" gamma 
+          with Symbol_table.NotFoundEntry ->  Util.raise_semantic_error dummy_pos "Main function not defined" in
+  match t with
+  | TFun([],r)    -> if (r != TVoid && r != TInt) 
+                    then Util.raise_semantic_error dummy_pos "Main function must return int or void"
+  | TFun([par],r) -> if (r != TVoid && r != TInt) 
+                    then Util.raise_semantic_error dummy_pos "Main function must return int or void"
+                    else ( if ( par != TInt) 
+                           then Util.raise_semantic_error dummy_pos "Main function must have at most one int parameter" )
+  |_            -> Util.raise_semantic_error dummy_pos "Main is not a function"
   
-
-
+  
 (** Check if the program is semantically correct 
   @param Prog(topdecls) the AST of the program
   @return TProg (ttopd) the typed AST of the program
@@ -351,7 +358,8 @@ let check (Prog(topdecls)) =
     let g0 = Symbol_table.empty_table in
     let g1 = Symbol_table.add_entry "print" (TFun([TInt],TVoid)) g0 in
     let g2 = Symbol_table.add_entry "printfl" (TFun([TFloat],TVoid)) g1 in
-    Symbol_table.add_entry "getint" (TFun([],TInt)) g2 in
+    let g3 = Symbol_table.add_entry "printch" (TFun([TChar],TChar)) g2 in
+    Symbol_table.add_entry "getint" (TFun([],TInt)) g3 in
   let (final_env, ttopd) = fold_left_map (fun x y -> (top_checking x y )) gamma_init topdecls in
   check_main final_env;
   TProg (ttopd)

@@ -28,7 +28,8 @@
 }
 
 let digit = ['0'-'9']
-let character = ['_''a'-'z' 'A'-'Z']
+let ascii = ([' '-'!' '#'-'[' ']'-'~'])
+let character = ( digit | ascii ) 
 let id = ['_''a'-'z' 'A'-'Z']['_''a'-'z' 'A'-'Z' '0'-'9']*
 
 rule token = parse
@@ -36,7 +37,7 @@ rule token = parse
     | '\n'                  { Lexing.new_line lexbuf; token lexbuf }
     | digit+ as i           { let num = int_of_string i in INT num}
     | digit+'.'digit* as f  { let num = float_of_string f in FLOAT num}
-    | '''character ''' as s { let c = String.get s 1 in CHAR c}
+    | ''' character ''' as c{ CHAR (String.get c 1) }
     | '"'                   { STRING( string (Buffer.create 509 )lexbuf) }
     | id as word            { try
                                 let token = Hashtbl.find keyword_table word in
@@ -77,7 +78,7 @@ rule token = parse
     | eof                   { EOF }
     | "//"                  {line_comment lexbuf}
     | "/*"                  { comment lexbuf}
-    | _ as c                { Util.raise_lexer_error lexbuf ("Illegal character " ^ Char.escaped c) }
+    | _ as c                { Util.raise_lexer_error lexbuf ("Illegal symbol " ^ Char.escaped c) }
 
 and line_comment = parse
     | '\n'                  { Lexing.new_line lexbuf; token lexbuf }
@@ -86,6 +87,7 @@ and comment = parse
     | "*/"                  { token lexbuf }
     | _                     { comment lexbuf }
     | eof                   { Util.raise_lexer_error lexbuf (" Comment not closed") }
+
 and string buf = parse
     | [^'"' '\n' '\\']+ as s    { Buffer.add_string buf s;
                                     string buf lexbuf }
@@ -98,4 +100,4 @@ and string buf = parse
                                     string buf lexbuf}
     | '"'                       { Buffer.contents buf } 
     | eof                       { Util.raise_lexer_error lexbuf ("end of file inside of a string") }
-    | _ as c                    { Util.raise_lexer_error lexbuf ("Illegal character " ^ Char.escaped c)}    
+    | _ as c                    { Util.raise_lexer_error lexbuf ("Illegal symbol " ^ Char.escaped c)}    

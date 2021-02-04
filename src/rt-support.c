@@ -11,3 +11,11 @@ int getint(){
 void print(int n){
   printf("%d\n", n);  
 }
+
+void printfl(float n){
+  printf("%f\n", n);  
+}
+
+void printch(char n){
+  printf("%c", n);  
+}

@@ -18,7 +18,7 @@
       let explode s =
         let char_to_exp c = {loc=dummy_pos ; node=CLiteral(c); id=next_label()} 
         in List.map char_to_exp (List.init (String.length s) ( String.get s))
-      in List.append (explode s) [{loc=dummy_pos ; node=CLiteral('\x00'); id=next_label()}]
+      in List.append (explode s) [{loc=dummy_pos ; node=CLiteral(Char.chr(0)); id=next_label()}]
 
     let make_node l n =
       {loc=l ; node=n; id=next_label()}

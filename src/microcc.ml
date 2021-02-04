@@ -32,7 +32,7 @@ let () =
         if !action = Semantic_check then
           begin
             Printf.printf "Semantic checks: pass\n";
-            Printf.printf "Ast dump\n %s\n" (Tast.show_tprogram tp)
+            Printf.printf "Typed Ast dump\n %s\n" (Tast.show_tprogram tp)
           end
         else
           begin
