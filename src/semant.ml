@@ -40,7 +40,8 @@ let rec typevar (t : typ) (l : position) =
   | TypB      -> TBool 
   | TypC      -> TChar
   | TypA(x,y) -> (match y with
-                | Some(i) ->  TArray (( typevar x l), i)
+                | Some(i) ->  if(i>=0) then TArray (( typevar x l), i)
+                              else Util.raise_semantic_error l "Declare array of negative length"
                 | None    ->  TArray (( typevar x l), 1))
   | TypP(x)   -> TPnt (typevar x l)
   | TypV      -> Util.raise_semantic_error l "Void is not a valid type for variable"
@@ -186,16 +187,15 @@ let rec check_expr  (e:expr) (gamma : context) (t : res option) =
                               | Sub
                               | Mult
                               | Div
-                              | Mod -> (match t with
-                                        | None 
-                                        | Some(TFloat) -> let (g, tex) = check_expr ex1 gamma (Some TFloat)  in
-                                                          let (g', tex') = check_expr ex2 g (Some TFloat) in
-                                                          (g',{ty = TFloat; node = TBinaryOp(b,tex,tex'); id = e.id})
-                                        | Some(TInt) -> let (g, tex) = check_expr ex1 gamma (Some TInt) in
-                                                        let (g', tex') = check_expr ex2 g (Some TInt) in
-                                                        (g',{ty = TInt; node = TBinaryOp(b,tex,tex'); id = e.id})
-                                        |_ -> Util.raise_semantic_error e.loc ("Only integer or float are valid operand"))
-                                      
+                              | Mod -> (try (let (g, tex) =check_expr ex1 gamma (Some TInt) in
+                                              let (g', tex') = check_expr ex2 g (Some TInt) in
+                                              (g',{ty = TInt; node = TBinaryOp(b,tex,tex'); id = e.id}))
+                                        with Util.Semantic_error(m) -> (
+                                          try (let (g, tex) = check_expr ex1 gamma (Some TFloat) in
+                                              let (g', tex') = check_expr ex2 g (Some TFloat) in
+                                              (g',{ty = TFloat; node = TBinaryOp(b,tex,tex'); id = e.id}))
+                                          with Util.Semantic_error(m) -> Util.raise_semantic_error e.loc m
+                                        ))
                               | Equal 
                               | Neq 
                               | Less 
@@ -208,7 +208,7 @@ let rec check_expr  (e:expr) (gamma : context) (t : res option) =
                                           try (let (g, tex) = check_expr ex1 gamma (Some TFloat) in
                                               let (g', tex') = check_expr ex2 g (Some TFloat) in
                                               (g',{ty = TBool; node = TBinaryOp(b,tex,tex'); id = e.id}))
-                                          with Util.Semantic_error(m) -> Util.raise_semantic_error e.loc ("Not valid types for binary operator")
+                                          with Util.Semantic_error(m) -> Util.raise_semantic_error e.loc m
                                         ))
                               | And 
                               | Or -> (let (g, tex) = check_expr ex1 gamma (Some TBool) in
@@ -245,9 +245,11 @@ let init_var (ty : res) (ex : expr list) (gamma : context) (global : bool)=
   match  ty with
   |TArray(ta,l) ->  let (new_gamma, texprl) = fold_left_map (fun x y -> (ce y x (Some ta))) gamma ex in
                     (*initialize an array of its declared length, eventually adding default values*)
-                    if(l == 0 || l == List.length(texprl))
+                    if((l == 1 &&  List.length(texprl) > 0) || l == List.length(texprl))
                     then texprl
-                    else (Util.print_warning (List.hd ex).loc "Warning: initialized with different length array" ;
+                    else if(l == 1) (*no length declaration, no init, length declaration to one is considered as absent*)
+                          then (expr_init (TArray(ta,1)) dummy_pos)
+                          else(Util.print_warning (List.hd ex).loc "Warning: initialized with different length array" ;
                           if(l > List.length(texprl))
                           then texprl@(expr_init (TArray(ta, (l-List.length texprl))) (List.hd ex).loc)
                           else List.map (List.nth texprl) (List.init l (fun x -> x)))

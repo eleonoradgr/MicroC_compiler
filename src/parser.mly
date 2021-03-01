@@ -87,7 +87,7 @@ topdec:
   | v=var LPAR par=separated_list(",", var) RPAR b=block
     { make_node $loc (Fundecl {typ = first v; fname = second v; formals = par; body = b}) }
   | error
-      { raise (Syntax_error "Error in top declaration") }
+      { raise (Syntax_error "declaration not valid") }
   
 ;
 
@@ -95,7 +95,7 @@ topdec:
   | t=type_def id=ID 
       { (t,id) }
   | t=type_def id=ID LBRACK RBRACK                   
-      { (TypA(t,Some(0)), id) }
+      { (TypA(t,None), id) }
   | t=type_def id=ID LBRACK i=INT RBRACK        
       { (TypA(t,Some(i)), id) }
 ;
@@ -209,7 +209,7 @@ ex:
   | LPAR e=ex RPAR
     {e}
   | error
-    { raise (Syntax_error "errore in exp") }
+    { raise (Syntax_error "expression not valid") }
 ;
 
 assop:

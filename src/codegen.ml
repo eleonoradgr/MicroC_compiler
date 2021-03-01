@@ -27,8 +27,8 @@ let primitive_unoperators = [
   ; (Not, TBool), (L.build_not, "not")
   ; (Inc, TInt), (L.build_add (L.const_int int_t 1), "inc")
   ; (Inc, TFloat), (L.build_fadd (L.const_float float_t 1.), "inc")
-  ; (Dec, TInt), (L.build_sub (L.const_int int_t 1), "dec")
-  ; (Dec, TFloat), (L.build_fsub (L.const_float float_t 1.), "dec")
+  ; (Dec, TInt), (L.build_add (L.const_int int_t (-1)), "dec")
+  ; (Dec, TFloat), (L.build_fadd (L.const_float float_t (-1.)), "dec")
 ]
 (* A table mapping a binary operator in the LLVM function that implemets it and its name *)
 let primitive_operators = 
@@ -153,7 +153,7 @@ let rec codegen_expr  env ibuilder te=
     | TBLiteral(b)  ->  L.const_int bool_t (Bool.to_int b)
     | TUnaryOp(u,ex)        -> let e = codegen_expr env ibuilder ex in
                                let (llvm_operator, label) = List.assoc (u,te.ty) primitive_unoperators in
-                               llvm_operator e label ibuilder                  
+                               llvm_operator e label ibuilder            
     | TBinaryOp(b,ex1,ex2)  -> let e1 = codegen_expr env ibuilder ex1 in
                                let e2 = codegen_expr env ibuilder ex2 in  
                                let (e1ll, e2ll), t = cast e1 e2  ex1.ty ex2.ty ibuilder in
@@ -165,10 +165,6 @@ let rec codegen_expr  env ibuilder te=
     | TCall("printfl", [e]) -> let ex = codegen_expr env ibuilder e in
                                let printfl = L.lookup_function "printfl" llmodule |> Option.get in
                                L.build_call printfl [| ex |] "call_printfl" ibuilder
-                                (*let ex = codegen_expr env ibuilder e in
-                               let str =  L.build_global_stringptr "%f\n" "fmt" ibuilder in
-                               let print = L.lookup_function "printf" llmodule |> Option.get in
-                               L.build_call print [| str ; ex |] "printf" ibuilder*)
     | TCall("printch", [e]) -> let ex = codegen_expr env ibuilder e in
                                let printch = L.lookup_function "printch" llmodule |> Option.get in
                                L.build_call printch [| ex |] "call_printch" ibuilder
@@ -224,7 +220,7 @@ let rec codegen_stmt current_fun env ibuilder = function
                         | [] -> ibuilder
                         | x::xs -> (match x.node with
                                     |TDec(t,i,e) -> (match e,t with
-                                                      |_,TArray(r,len)  -> ((*let local_var = L.build_alloca (array_t (lltype_of_type r) len) i ibuilder in*)
+                                                      |_,TArray(r,len)  -> (
                                                                             let local_var = L.build_alloca (array_t (lltype_of_type r) (List.length e)) i ibuilder in
                                                                             let env' = Symbol_table.add_entry i local_var env in
                                                                             let ls = List.map (codegen_expr env ibuilder ) e in

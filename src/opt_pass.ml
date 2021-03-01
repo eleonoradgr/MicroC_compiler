@@ -8,7 +8,10 @@ let optimize_module llvm_module =
 
   (* constant propagation *)
   Llvm_scalar_opts.add_constant_propagation pass_manager;
-
+  
+  (* constant propagation *)
+  (*Llvm_scalar_opts.add_sccp pass_manager;*)
+  
   (* loop unrolling *)
   Llvm_scalar_opts.add_loop_unroll pass_manager;
 

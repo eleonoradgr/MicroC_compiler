@@ -14,5 +14,4 @@ void main(){
     char prova[]="ciao";
     char prova1[]= "io sono una \n stringa \"   \
                     molto particolare";
-    print(i);
 }

@@ -1,0 +1,8 @@
+int main(int pred){
+    int x0 = 1;
+    bool b = (x0 != 1);
+    if (b){
+        x0 = 2;
+    }
+    return x0;
+}

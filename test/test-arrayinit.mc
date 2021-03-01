@@ -12,4 +12,6 @@ void main(){
     printArray(a,5);
     int b[3] = {1, 2, 3, 4};
     printArray(b,3);
+    int c[];
+    printArray(c,1);
 }

@@ -5,13 +5,17 @@ int main(int n){
   int i;
   e = &a;
   int *p = e;
+  print(n);
   if(n >= 0){
+      print(i);
       do{
         i++;
       }while(i<n);
   }else{
+      print(i);
       do{
         i--;
+        print(i);
       }while(i>n);
   }
   p = &i;

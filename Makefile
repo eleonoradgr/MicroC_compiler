@@ -1,5 +1,5 @@
 TARGET=microcc
-TEST = ./test
+TESTSEMANT = ./testsemant
 TESTCODEGEN = ./testcodegen
 PARSEROUTPUT = parserout
 
@@ -10,21 +10,28 @@ $TARGET: default
 native: $(TARGET).native
 
 %.native:
+	rm -f test.o
 	ocamlbuild -use-ocamlfind -pkgs llvm,llvm.bitwriter,llvm.scalar_opts $@
 	mv $@ $*
 
 clean:
 	ocamlbuild -clean ;\
 	rm -f $(PARSEROUTPUT);\
-	rm -f test.o
+	rm -f test.o;\
+	rm -f test.bc;\
+	rm -f a.bc;
 
-test: $TARGET $(TEST)
+testsemant: clean $TARGET
 		rm -f $(PARSEROUTPUT); \
-		for file in $(TEST)/* ; do \
+		for file in $(TESTSEMANT)/* ; do \
 			echo $${file} >> $(PARSEROUTPUT); \
 			./$(TARGET) -s $${file} >> $(PARSEROUTPUT);\
 			done
-testcodegen: $TARGET
+rtsupport: 
+		clang -emit-llvm -S src/rt-support.c -o rt-support.ll; \
+		llvm-as rt-support.ll -o rt-support.bc
+
+testcodegen: clean rtsupport $TARGET
 			for file in $(TESTCODEGEN)/*.mc ; do \
 			echo $${file};\
 			./$(TARGET) $${file};\
@@ -36,4 +43,15 @@ testcodegen: $TARGET
 			rm -f text1.txt;\
 			done
 
-.PHONY: clean default test testcodegen
+compile: rtsupport $TARGET
+		rm -f a.out;\
+		./$(TARGET) $(file);\
+		 llvm-link a.bc rt-support.bc -o test.bc;\
+		 rm -f a.bc;\
+		 llc -filetype=obj test.bc;\
+		 rm -f test.bc;\
+		 clang test.o;\
+		 rm -f test.o;\
+
+
+.PHONY: clean default testsemant testcodegen compile compilerun
